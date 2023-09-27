@@ -182,6 +182,7 @@ class WorkflowBase(object):
         workflow_metadata_defaults: WorkflowMetadataDefaults,
         python_interface: Interface,
         docs: Optional[Documentation] = None,
+        failure_node: Optional[Node] = None,
         **kwargs,
     ):
         self._name = name
@@ -194,6 +195,7 @@ class WorkflowBase(object):
         self._nodes: List[Node] = []
         self._output_bindings: List[_literal_models.Binding] = []
         self._docs = docs
+        self._failure_node = failure_node
 
         if self._python_interface.docstring:
             if self.docs is None:
@@ -249,6 +251,10 @@ class WorkflowBase(object):
     def nodes(self) -> List[Node]:
         self.compile()
         return self._nodes
+
+    @property
+    def failure_node(self) -> Optional[Node]:
+        return self._failure_node
 
     def __repr__(self):
         return (
@@ -627,10 +633,19 @@ class PythonFunctionWorkflow(WorkflowBase, ClassStorageTaskResolver):
         default_metadata: WorkflowMetadataDefaults,
         docstring: Optional[Docstring] = None,
         docs: Optional[Documentation] = None,
+        on_error: Optional[PythonTask] = None,
     ):
         name, _, _, _ = extract_task_module(workflow_function)
         self._workflow_function = workflow_function
         native_interface = transform_function_to_interface(workflow_function, docstring=docstring)
+
+        failure_node = Node(
+            id="failure_node",
+            metadata=None,
+            bindings=[],
+            upstream_nodes=[],
+            flyte_entity=on_error if on_error else None,
+        )
 
         # TODO do we need this - can this not be in launchplan only?
         #    This can be in launch plan only, but is here only so that we don't have to re-evaluate. Or
@@ -642,6 +657,7 @@ class PythonFunctionWorkflow(WorkflowBase, ClassStorageTaskResolver):
             workflow_metadata_defaults=default_metadata,
             python_interface=native_interface,
             docs=docs,
+            failure_node=failure_node,
         )
         self.compiled = False
 
@@ -752,6 +768,7 @@ def workflow(
     failure_policy: Optional[WorkflowFailurePolicy] = ...,
     interruptible: bool = ...,
     docs: Optional[Documentation] = ...,
+    on_error: Optional[PythonTask] = None,
 ) -> Callable[[Callable[..., FuncOut]], PythonFunctionWorkflow]:
     ...
 
@@ -762,6 +779,7 @@ def workflow(
     failure_policy: Optional[WorkflowFailurePolicy] = ...,
     interruptible: bool = ...,
     docs: Optional[Documentation] = ...,
+    on_error: Optional[PythonTask] = None,
 ) -> Union[PythonFunctionWorkflow, Callable[..., FuncOut]]:
     ...
 
@@ -771,6 +789,7 @@ def workflow(
     failure_policy: Optional[WorkflowFailurePolicy] = None,
     interruptible: bool = False,
     docs: Optional[Documentation] = None,
+    on_error: Optional[PythonTask] = None,
 ) -> Union[Callable[[Callable[..., FuncOut]], PythonFunctionWorkflow], PythonFunctionWorkflow, Callable[..., FuncOut]]:
     """
     This decorator declares a function to be a Flyte workflow. Workflows are declarative entities that construct a DAG
@@ -800,6 +819,7 @@ def workflow(
     :param failure_policy: Use the options in flytekit.WorkflowFailurePolicy
     :param interruptible: Whether or not tasks launched from this workflow are by default interruptible
     :param docs: Description entity for the workflow
+    :param on_error: define the failure node to handle the error
     """
 
     def wrapper(fn: Callable[..., Any]) -> PythonFunctionWorkflow:
@@ -813,6 +833,7 @@ def workflow(
             default_metadata=workflow_metadata_defaults,
             docstring=Docstring(callable_=fn),
             docs=docs,
+            on_error=on_error,
         )
         update_wrapper(workflow_instance, fn)
         return workflow_instance

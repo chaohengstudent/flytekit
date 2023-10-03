@@ -526,6 +526,7 @@ class FlyteWorkflow(_hash_mixin.HashOnReferenceMixin, RemoteEntity, WorkflowSpec
         output_bindings,
         metadata,
         metadata_defaults,
+        failure_node: Optional[FlyteNode],
         subworkflows: Optional[List[FlyteWorkflow]] = None,
         tasks: Optional[List[FlyteTask]] = None,
         launch_plans: Optional[Dict[id_models.Identifier, launch_plan_models.LaunchPlanSpec]] = None,
@@ -555,6 +556,7 @@ class FlyteWorkflow(_hash_mixin.HashOnReferenceMixin, RemoteEntity, WorkflowSpec
                 interface=interface,
                 nodes=nodes,
                 outputs=output_bindings,
+                failure_node=failure_node
             ),
             sub_workflows=template_subworkflows,
         )
@@ -686,6 +688,8 @@ class FlyteWorkflow(_hash_mixin.HashOnReferenceMixin, RemoteEntity, WorkflowSpec
             )
             node_map[node.id] = flyte_node
 
+        fn, csw = cls._promote_node(base_model.failure_node, sub_workflows, node_launch_plans, tasks, converted_sub_workflows)
+
         # Set upstream nodes for each node
         for n in base_model_non_system_nodes:
             current = node_map[n.id]
@@ -712,6 +716,7 @@ class FlyteWorkflow(_hash_mixin.HashOnReferenceMixin, RemoteEntity, WorkflowSpec
             subworkflows=subworkflow_list,
             tasks=task_list,
             launch_plans=node_launch_plans,
+            failure_node=fn,
         )
 
         wf._node_map = node_map

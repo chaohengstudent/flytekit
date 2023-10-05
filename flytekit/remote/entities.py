@@ -688,7 +688,8 @@ class FlyteWorkflow(_hash_mixin.HashOnReferenceMixin, RemoteEntity, WorkflowSpec
             )
             node_map[node.id] = flyte_node
 
-        fn, csw = cls._promote_node(base_model.failure_node, sub_workflows, node_launch_plans, tasks, converted_sub_workflows)
+        fn, converted_sub_workflows = cls._promote_node(base_model.failure_node, sub_workflows, node_launch_plans, tasks, converted_sub_workflows)
+        node_map[base_model.failure_node.id] = fn
 
         # Set upstream nodes for each node
         for n in base_model_non_system_nodes:
